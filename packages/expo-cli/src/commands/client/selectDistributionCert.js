@@ -125,6 +125,15 @@ async function generateDistributionCert(context) {
   try {
     const distributionCert = await manager.create({});
 
+    if (!distributionCert) {
+      log.error(
+        `Failed to generate distribution certificate. Your Apple user account may not have sufficient permissions to generate credentials, please review your Apple account permissions.`
+      );
+      return await selectDistributionCert(context, {
+        disableAutoSelectExisting: true,
+      });
+    }
+
     // tag for updating to Expo servers
     tagForUpdate(distributionCert);
 
