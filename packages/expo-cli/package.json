@@ -65,6 +65,7 @@
     "typescript": "^3.5.1"
   },
   "dependencies": {
+    "@expo/build-tools": "0.1.0-alpha.6",
     "@expo/bunyan": "3.0.2",
     "@expo/config": "^2.3.0",
     "@expo/dev-tools": "^0.6.8",
