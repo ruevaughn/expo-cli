@@ -37,7 +37,13 @@ import * as Android from './Android';
 import Api from './Api';
 import ApiV2 from './ApiV2';
 import * as AssetUtils from './AssetUtils';
-import { calculateHash, createNewFilename, getAssetFilesAsync, optimizeImageAsync, readAssetJsonAsync } from './AssetUtils';
+import {
+  calculateHash,
+  createNewFilename,
+  getAssetFilesAsync,
+  optimizeImageAsync,
+  readAssetJsonAsync,
+} from './AssetUtils';
 import Config from './Config';
 import * as ExponentTools from './detach/ExponentTools';
 import StandaloneContext from './detach/StandaloneContext';
@@ -788,7 +794,8 @@ export async function publishAsync(
   if (
     validPostPublishHooks.length ||
     (exp.ios && exp.ios.publishManifestPath) ||
-    (exp.android && exp.android.publishManifestPath)
+    (exp.android && exp.android.publishManifestPath) ||
+    (exp.android && exp.android.appDirectory)
   ) {
     let [androidManifest, iosManifest] = await Promise.all([
       ExponentTools.getManifestAsync(response.url, {
@@ -856,6 +863,38 @@ export async function publishAsync(
       });
     }
 
+    if (exp.updates.enabled) {
+      const context = StandaloneContext.createUserContext(projectRoot, exp);
+      const { supportingDirectory } = IosWorkspace.getPaths(context);
+      if (!fs.existsSync(supportingDirectory)) {
+        logger.global.warn(
+          'Supporting dir does not exist, creating at ',
+          path.join(projectRoot, supportingDirectory)
+        );
+        fs.mkdirpSync(supportingDirectory);
+      }
+      await _writeArtifactSafelyAsync(
+        supportingDirectory,
+        'ios.publishManifestToAssets',
+        'shell-app-manifest.json',
+        JSON.stringify(iosManifest)
+      );
+      logger.global.info(
+        'Ios manifest written to',
+        path.join(projectRoot, supportingDirectory, 'shell-app.bundle')
+      );
+      await _writeArtifactSafelyAsync(
+        supportingDirectory,
+        'ios.publishBundleToAssets',
+        'shell-app.bundle',
+        iosBundle
+      );
+      logger.global.info(
+        'Ios manifest written to',
+        path.join(supportingDirectory, 'shell-app-manifest.json')
+      );
+    }
+
     if (exp.android && exp.android.publishManifestPath) {
       await _writeArtifactSafelyAsync(
         projectRoot,
@@ -901,6 +940,27 @@ export async function publishAsync(
         /RELEASE_CHANNEL = "[^"]*"/,
         `RELEASE_CHANNEL = "${options.releaseChannel}"`,
         constantsPath
+      );
+    }
+
+    if (exp.updates.enabled && exp.android.appDirectory) {
+      let assetsPath = path.join('android', exp.android.appDirectory, 'src', 'main', 'assets');
+      if (!fs.existsSync(path.join(projectRoot, assetsPath))) {
+        fs.mkdirpSync(path.join(projectRoot, assetsPath));
+      }
+      let manifestPath = path.join(assetsPath, 'shell-app-manifest.json');
+      let bundlePath = path.join(assetsPath, 'shell-app.bundle');
+      await _writeArtifactSafelyAsync(
+        projectRoot,
+        'android.publishManifestToAssets',
+        manifestPath,
+        JSON.stringify(androidManifest)
+      );
+      await _writeArtifactSafelyAsync(
+        projectRoot,
+        'android.publishBundleToAssets',
+        bundlePath,
+        androidBundle
       );
     }
   }
@@ -1674,7 +1734,11 @@ export async function startReactNativeServerAsync(
 
   let customLogReporterPath: string | undefined;
 
-  const possibleLogReporterPath = ConfigUtils.projectHasModule('expo/tools/LogReporter', projectRoot, exp);
+  const possibleLogReporterPath = ConfigUtils.projectHasModule(
+    'expo/tools/LogReporter',
+    projectRoot,
+    exp
+  );
   if (possibleLogReporterPath) {
     customLogReporterPath = possibleLogReporterPath;
   } else {
